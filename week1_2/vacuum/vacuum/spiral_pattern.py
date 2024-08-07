@@ -29,65 +29,50 @@ class SpiralPattern(Node):
         # Assuming the turtle doesn't have mass omega = V/r
         # r = V/omega [1]
         # Using Archimedes spiral formula
-        # r = b * theta [2] where b is a constant that control the distance between loops
+        # r = a * theta [2] where b is a constant that control the distance between loops
         # Combine two formula we can get a function of V where omega stay constant
         # and we get theta from our simulation
         # V/omega = b* theta
-        # V = b * theta * omega
+        # V = a * theta * omega
         
         #initialize the constants
-        self.b = 0.1
-        self.omega = 1.0
+        self.a = 0.1
+        self.v = 0.5
+        self.total_theta_travelled = 0.5
         self.pose = Pose()
-        self.previous_theta=0
-        self.get_logger().info(f'previous theta = {self.previous_theta}')
 
         #Timer for how fast the velocity is being published
-        timer_period = 0.1 #second
-        self.convolution =0
+        self.timer_period = 0.1 #second
     
-        self.timer = self.create_timer(timer_period, self.move_spiral)
+        self.timer = self.create_timer(self.timer_period, self.move_spiral)
         self.get_logger().info('I am moving')
-        self.total=0
       
 
     def update_pose(self,msg):
         self.pose = Pose()
         self.pose = msg
-
-    def move_spiral(self):
-        move_command = Twist()
-        #Initial velocity
-        current_theta = self.convert_angle(self.calculate_angle_from_center (self.pose.x, self.pose.y)) + 2 *np.pi*self.convolution
-        self.get_logger().info(f'curent theta = {current_theta}')
-
-        delta_theta = current_theta - self.previous_theta
-        self.get_logger().info(f'delta theta {delta_theta}')
         
-        if delta_theta < -5 :
-            self.get_logger().info(f'one convolution passed')
-            self.convolution += 1
+############ Main Function ##############################################################################
+    def move_spiral(self):
+        # The robot needs to follow Archemedes spiral r = a * theta
+        # r = radius, a = constant determine the distance between lines, theta = total theta travelled
+        # r = V/omega -> omega =V/r -> omega = V / a * total_theta_travelled
 
-        self.get_logger().info(f' number of convolution = {self.convolution}')
-        #if self.previous_theta > current_theta +5:
-        #    current_theta += 2 * np.pi
-        #    self.get_logger().info(f'one convolution passed')
+        #Initial velocity
 
-        r = self.calculate_distance(self.pose.x, self.pose.y)
-        move_command.linear.x = self.b * current_theta * self.omega
+        move_command = Twist()
+
+        self.omega = self.v / (self.a * self.total_theta_travelled)
+
+        move_command.linear.x = self.v
         move_command.angular.z = self.omega
         
-
-
-        self.previous_theta = current_theta
-
-
-        self.get_logger().info(f'previous theta = {self.previous_theta}')
+        self.total_theta_travelled += self.omega * self.timer_period
 
         self.get_logger().info(f'linear = {move_command.linear.x} - angular = {move_command.angular.z}')
         self.vel_publisher.publish(move_command)
 
-
+####### Auxilary Functions ################################################################################
     def reset_turtle(self):
         request = Empty.Request()
         future = self.reset_client.call_async(request)
@@ -105,7 +90,7 @@ class SpiralPattern(Node):
             angle += 2 * np.pi
         return angle
 
-    def calculate_distance(self, pose_x, pose_y):
+    def calculate_distance_from_center(self, pose_x, pose_y):
         return np.sqrt((pose_x-5.5)**2+(pose_y-5.5)**2)
 
 

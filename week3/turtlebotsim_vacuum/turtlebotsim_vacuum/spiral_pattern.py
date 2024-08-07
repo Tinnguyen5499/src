@@ -10,50 +10,61 @@ from std_srvs.srv import Empty
 import time
 
 class SpiralPattern(Node):
-    super().__init__('spiral_pattern')
 
-###### Initializing Necessary Publishers, Subscribers, Clients ##############################
+    def __init__(self):
+        super().__init__('spiral_pattern')
 
-    #Creating Subscriber to subscribe to Odometry topic to get robot's position
-     self.pose_subscriber = self.create_subscription(Odometry, '/odom', self.update_pose,10)
+    ###### Initializing Necessary Publishers, Subscribers, Clients ##############################
 
-    #Creating Publisher that create random goal and publish command to move to random goal
-    self.vel_publisher = self.create_publisher(Twist, '/cmd_vel', 10)
+        #Creating Subscriber to subscribe to Odometry topic to get robot's position
+        self.pose_subscriber = self.create_subscription(Odometry,'/odom',self.update_pose,10)
+        self.subscriptions
 
-    #Create a Client that request from gazebo to reset the world everytime the world to avoid restarting gazebo everytime script is run for debugging
-    self.reset_world_client = self.create_client(Empty, '/reset_world')
-    while not self.reset_world_client.wait_for_service(timeout_sec=1.0):
-        self.get_logger().info('Reset world not available,waiting ...')
+        #Creating Publisher that create random goal and publish command to move to random goal
+        self.vel_publisher = self.create_publisher(Twist, '/cmd_vel', 10)
 
-    self.reset_world()
+        #Create a Client that request from gazebo to reset the world everytime the world to avoid restarting gazebo everytime script is run for debugging
+        self.reset_world_client = self.create_client(Empty, '/reset_world')
+        while not self.reset_world_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Reset world not available,waiting ...')
 
-    #Publishing velocity message with timer_period increment
-    self.timer_period = 0.1
-    self.timer = self.create_timer(self.timer_period,self.robot_control_loop)
-    self.get_logger().info('I am moving to goal')
+        #Publishing velocity message with timer_period increment
+        self.timer_period = 0.1
+        self.timer = self.create_timer(self.timer_period,self.move_spiral)
+        self.get_logger().info('I am moving to goal')
 
 
-    # Assuming the turtle doesn't have mass omega = V/r
-    # r = V/omega [1]
-    # Using Archimedes spiral formula
-    # r = b * theta [2] where b is a constant that control the distance between loops
-    # Combine two formula we can get a function of V where omega stay constant
-    # and we get theta from our simulation
-    # V/omega = b* theta
-    # V = b * theta * omega
+        # Assuming the turtle doesn't have mass omega = V/r
+        # r = V/omega [1]
+        # Using Archimedes spiral formula
+        # r = a * theta [2] where a is a constant that control the distance between loops
+        # Combine two formula we can get a function of Omega where V stay constant
+        # r = V/omega -> omega =V/r -> omega = V / a * total_theta_travelled
 
-    ### Initialize variables ########
-    
-    #Robot control variables#
-    self.kp_linear = 0.5
-    self.goal_tolerance = 0.1
-    self.kp_angular = 0.5
+        ### Initialize variables ########
+        self.Odometry = Odometry()
+        #Robot Path Variables
+        #testing
+        self.a = 0.1
+        self.linear_velocity = 0.4
+        self.total_theta_travelled = 0.5
+        self.omega = 0
 
-    #Robot Path Variables#
-    self.a = 0.1
-    self.omega = 1.0
-    self.previous_theta = 0
-    self.get_logger().info(f'previous theta = {self.previous_theta}')
+
+        #### ADDED FOR TO VISUALIZE - DELETE FOR THE REAL ROBOT ##########################
+        self.spawn_marker_client = self.create_client(SpawnEntity, '/spawn_entity')
+        while not self.spawn_marker_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Spawn entity service not available, waiting ...')
+
+        self.delete_marker_client = self.create_client(DeleteEntity, '/delete_entity')
+        while not self.delete_marker_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Delete entity service not available, waiting ...')
+
+        self.marker_names = []
+        self.loop_count = 0
+        ##################################################################################
+        
+        self.reset_world()
 
 ########### MAIN FUNCTIONS ###############################################################
 
@@ -71,24 +82,72 @@ class SpiralPattern(Node):
         robot_orientation = self.Odometry.pose.pose.orientation
         robot_yaw = self.get_yaw_from_quaternion(robot_orientation)
 
-    # The robot needs to follow Archemedes spiral r = a * theta
-    # Needs to calculate the theta of the robot to know when robot has made a convolution of 360 degree
-        current theta = self.convert_angle(self.calculate_angle_from_center)
+        # Calculate robot's omega as it changes as the total theta travelled increased
 
-    
+        self.omega = self.linear_velocity / (self.a * self.total_theta_travelled)
 
-    
+        move_command.linear.x = self.linear_velocity
+        move_command.angular.z = self.omega
 
+        self.total_theta_travelled += self.omega * self.timer_period
 
+        self.get_logger().info(f'linear = {move_command.linear.x}, angular = {move_command.angular.z}, total theta = {self.total_theta_travelled}')
 
+        self.vel_publisher.publish(move_command)
 
+    ############VISUALIZATION ONLY - DELETE FOR ACTUAL ROBOT###############        
+    # Visualize the path by spawning markers
+        self.loop_count += 1
+        if self.loop_count % 20 == 0:
+            self.visualize_path(robot_x,robot_y)
 
-
+    ############VISUALIZATION ONLY - DELETE FOR ACTUAL ROBOT###############
 
 
 
 ######### AUXILARY FUNCTIONS #################################################################
 
+    ##### ADDED FOR VISUALIZATION - DELETE FOR REAL ROBOT ######################################################
+    def visualize_path(self, x, y):
+        marker_name = f'marker_{time.time()}'
+        req = SpawnEntity.Request()
+        req.name = marker_name
+        req.xml = f"""
+        <sdf version='1.6'>
+          <model name='{marker_name}'>
+            <static>true</static>
+            <link name='link'>
+              <visual name='visual'>
+                <geometry>
+                  <sphere>
+                    <radius>0.05</radius>
+                  </sphere>
+                </geometry>
+                <material>
+                  <ambient>0 0 1 1</ambient>
+                  <diffuse>0 0 1 1</diffuse>
+                </material>
+              </visual>
+            </link>
+          </model>
+        </sdf>
+        """
+        req.robot_namespace = marker_name
+        req.initial_pose.position.x = x
+        req.initial_pose.position.y = y
+        req.initial_pose.position.z = 0.0
+        req.initial_pose.orientation.w = 1.0
+        future = self.spawn_marker_client.call_async(req)
+
+    def delete_all_markers(self):
+        for marker_name in self.marker_names:
+            request = DeleteEntity.Request()
+            request.name = marker_name
+            future = self.delete_marker_client.call_async(request)
+        self.marker_names = []  
+    ##############################################################################################
+    
+    
     def reset_world(self):
         request=Empty.Request()
         future = self.reset_world_client.call_async(request)
@@ -98,7 +157,8 @@ class SpiralPattern(Node):
         else:
             self.get_logger().error('Failed to reset the world')
         self.stop_robot()
-        self.delete_goal_marker()
+        ### Added for visualizatoin ####
+        self.delete_all_markers()
 
     def random_goal_generate(self):
         self.get_logger().info('generating random goal')
@@ -115,14 +175,12 @@ class SpiralPattern(Node):
     def calculate_angle_to_goal(self, pose_x, pose_y, goal_x, goal_y):
         return np.arctan2(goal_y-pose_y,goal_x-pose_x)
 
-    def calculate_angle_from_center(self,pose_x,pose_y):
-        return np.arctan2(pose_y-5.5,pose_x-5.5)
+    def calculate_angle_from_center(self,pose_x,pose_y,center_x,center_y):
+        return np.arctan2(pose_y-center_y,pose_x-center_x)
 
-    def calculate_distance_form_center(self, pose_x, pose_y):
-        return np.sqrt((pose_x-5.5)**2+(pose_y-5.5)**2)
+    def calculate_distance_form_center(self, pose_x, pose_y, center_x, center_y):
+        return np.sqrt((pose_x-center_x)**2+(pose_y-center_y)**2)
 
-    
-    
     def stop_robot(self):
         move_command = Twist()
         move_command.linear.x = 0.0
@@ -141,52 +199,6 @@ class SpiralPattern(Node):
         while theta < -np.pi:
             theta += 2 * np.pi
         return theta
-
-    def goal_visualize(self):
-        self.get_logger().info('goal visualizing')
-        req = SpawnEntity.Request()
-        req.name ='goal_marker'
-        req.xml = """
-        <sdf version='1.6'>
-          <model name='goal_marker'>
-            <static>true</static>
-            <link name='link'>
-              <visual name='visual'>
-                <geometry>
-                  <sphere>
-                    <radius>0.1</radius>
-                  </sphere>
-                </geometry>
-                <material>
-                  <ambient>1 0 0 1</ambient>
-                  <diffuse>1 0 0 1</diffuse>
-                </material>
-              </visual>
-            </link>
-          </model>
-        </sdf>
-        """
-        req.robot_namespace = 'goal_marker'
-        req.initial_pose = self.goal.pose
-        future = self.goal_visualization_client.call_async(req)
-        #rclpy.spin_until_future_complete(self, future)
-        #if future.result() is not None:
-        #    self.get_logger().info('Goal marker spawned successfully')
-        #else:
-        #    self.get_logger().error('Failed to spawn goal marker')
-
-        #self.get_logger().info(f'Random goal spawn at x = {self.goal.pose.position.x}, y ={self.goal.pose.position.y}')
-
-    def delete_goal_marker(self):
-        request = DeleteEntity.Request()
-        request.name = 'goal_marker'
-        future = self.delete_visualization_client.call_async(request)
-        #rclpy.spin_until_future_complete(self,future)
-        #if future.result() is not None:
-        #   self.get_logger().info('Goal marker deleted successfully')
-        #else:
-        #    self.get_logger().error('Gailed to delete goal marker')
-
 
     def convert_angle(self,angle):
         if angle <0:
