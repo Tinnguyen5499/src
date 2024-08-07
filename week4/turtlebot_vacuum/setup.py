@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'turtlebot_basic_movements'
+package_name = 'turtlebot_vacuum'
 
 setup(
     name=package_name,
@@ -16,17 +16,11 @@ setup(
     maintainer='root',
     maintainer_email='tin.nguyen5499@gmail.com',
     description='TODO: Package description',
-    license='Apache2.0',
+    license='Apache-2.0',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'square = turtlebot_basic_movements.square:main',
-            'turn_left = turtlebot_basic_movements.turn_left:main',
-            'turn_right = turtlebot_basic_movements.turn_right:main',
-            'go_straight = turtlebot_basic_movements.go_straight:main',
-            'stop = turtlebot_basic_movements.stop:main',
-            'current_states = turtlebot_basic_movements.current_states:main',
-            'square_using_yaw = turtlebot_basic_movements.square_using_yaw:main',
+            'spiral = turtlebot_vacuum.spiral:main'
         ],
     },
 )
