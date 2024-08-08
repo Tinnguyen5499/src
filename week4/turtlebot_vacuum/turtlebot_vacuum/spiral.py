@@ -4,13 +4,13 @@ import numpy as np
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 import time
-'''
+
 ####For visualization only #####
 from gazebo_msgs.srv import SpawnEntity
 from geometry_msgs.msg import PoseStamped
 from std_srvs.srv import Empty
 ######for visualization only #####
-'''
+
 class Spiral(Node):
 ############ INITIALIZING ROS AND VARIABLES############################################################
 
@@ -28,7 +28,6 @@ class Spiral(Node):
         self.timer_period = 0.1
         self.timer = self.create_timer(self.timer_period,self.robot_controller)
         self.get_logger().info('Messages')
-
         #### Initialize variable #####
         self.Odometry = Odometry()
         self.initial_position = None
@@ -36,12 +35,12 @@ class Spiral(Node):
         self.linear_velocity = 0.1   ## burger's max v is 0.22m/s
         self.angular_velocity = 0.2  ## burger's max omega is 2.84 rad/s
         self.total_angle = 0         ## Initialize total angle to find relative angle travelled
-        #######asdfdalskfnlkwejfwjklfwejlf kew
+
         #### Archimedes spiral parameters ####
-        self.a = 0.05
-        self.total_theta_travelled = 1
-        self.pervious_relative_angle = 0
-        '''
+        self.a = 0.03
+        self.total_theta_travelled = 1.5
+        self.previous_relative_angle = 0
+        
         #### ADDED FOR TO VISUALIZE - DELETE FOR THE REAL ROBOT ##########################
         self.spawn_marker_client = self.create_client(SpawnEntity, '/spawn_entity')
         while not self.spawn_marker_client.wait_for_service(timeout_sec=1.0):
@@ -50,7 +49,7 @@ class Spiral(Node):
         self.marker_names = []
         self.loop_count = 0
         ##################################################################################       
-        '''
+        
 ########### MAIN FUNCTIONS ###############################################################
 
     #Updating Pose
@@ -86,16 +85,23 @@ class Spiral(Node):
         move_command.linear.x = self.linear_velocity
         move_command.angular.z = self.angular_velocity
 
-        self.total_theta_travelled += abs(self.relative_angle - self.pervious_relative_angle)
+        # Correctly accumulate total angle traveled
+        angle_increment = self.relative_angle - self.previous_relative_angle
+        if angle_increment > np.pi:
+            angle_increment -= 2 * np.pi
+        elif angle_increment < -np.pi:
+            angle_increment += 2 * np.pi
 
-        self.pervious_relative_angle = self.relative_angle
+        self.total_theta_travelled += angle_increment
 
-        self.get_logger().info(f'linear = {move_command.linear.x}, angular = {move_command.angular.z}, total theta = {self.total_theta_travelled}')
+        self.previous_relative_angle = self.relative_angle
+
+        self.get_logger().info(f'linear = {move_command.linear.x}, angular = {move_command.angular.z}, total theta = {self.total_theta_travelled}, r ={move_command.linear.x/move_command.angular.z}')
         
         ###Publishing message#########
         self.vel_publisher.publish(move_command)
 
-    '''
+    
     ############VISUALIZATION ONLY - DELETE FOR ACTUAL ROBOT###############        
     # Visualize the path by spawning markers
         self.loop_count += 1
@@ -103,10 +109,10 @@ class Spiral(Node):
             self.visualize_path(robot_x,robot_y)
 
     ############VISUALIZATION ONLY - DELETE FOR ACTUAL ROBOT###############
-    '''
+    
 
 ######### AUXILARY FUNCTIONS #################################################################
-    '''
+    
     ##### ADDED FOR VISUALIZATION - DELETE FOR REAL ROBOT ######################################################
     def visualize_path(self, x, y):
         marker_name = f'marker_{time.time()}'
@@ -140,7 +146,7 @@ class Spiral(Node):
         future = self.spawn_marker_client.call_async(req)
 
     ##############################################################################################
-    '''
+    
     def calculate_distance(self, initial_position, current_position):
         x1, y1 = initial_position
         x2, y2 = current_position

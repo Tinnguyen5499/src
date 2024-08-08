@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'turtlebot_vacuum'
+package_name = 'turtlebot_random_mover'
 
 setup(
     name=package_name,
@@ -20,8 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'spiral = turtlebot_vacuum.spiral:main',
-            'square = turtlebot_vacuum.square:main',
+            'random_mover = turtlebot_random_mover.random_mover:main',
         ],
     },
 )

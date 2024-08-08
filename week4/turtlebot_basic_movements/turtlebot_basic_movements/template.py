@@ -29,6 +29,9 @@ class TurnLeft(Node):
         self.angular_velocity = 0.2  ## burger's max omega is 2.84 rad/s
         self.total_angle = 0         ## Initialize total angle to find relative angle travelled
         self.wanted_angle = pi/2     ## Wanted angle pi/2 = turing 90 degree angle
+
+        self.initial_position = None
+        self.initial_yaw = None
         
 
 ########### MAIN FUNCTIONS ###############################################################
